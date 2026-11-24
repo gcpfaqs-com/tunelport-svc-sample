@@ -1,0 +1,119 @@
+name: Tag security and build image
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Gitleaks full Git history
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan secrets with Gitleaks CLI
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" zricethezav/gitleaks:latest git /repo -v --exit-code 1
+
+  go-security:
+    name: Snyk SCA and gosec SAST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Snyk CLI
+        run: npm install --global snyk
+
+      - name: Run Snyk dependency scan high and critical
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test --severity-threshold=high
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run gosec high and critical
+        run: "$(go env GOPATH)/bin/gosec -severity high ./..."
+
+  go-tests:
+    name: Go unit and package tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.4"
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+            go-1.27.4
+
+      - name: Run Go tests
+        run: go test -v -race ./...
+
+  build-and-push:
+    name: Build and push image to GHCR
+    needs:
+      - gitleaks
+      - go-security
+      - go-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ github.ref_name }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

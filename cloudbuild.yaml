@@ -1,0 +1,17 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/images/$REPO_NAME:$TAG_NAME
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/images/$REPO_NAME:$TAG_NAME
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/images/$REPO_NAME:$TAG_NAME
+
+options:
+  logging: CLOUD_LOGGING_ONLY

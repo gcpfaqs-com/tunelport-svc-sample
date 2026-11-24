@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package totem;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "tunelport-svc-totems/gapi";
+
+message Totem {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+service TotemService {
+  rpc CreateTotem(CreateTotemRequest) returns (CreateTotemResponse);
+  rpc GetTotem(GetTotemRequest) returns (GetTotemResponse);
+  rpc UpdateTotem(UpdateTotemRequest) returns (UpdateTotemResponse);
+  rpc DeleteTotem(DeleteTotemRequest) returns (DeleteTotemResponse);
+  rpc ListTotems(ListTotemsRequest) returns (ListTotemsResponse);
+}
+
+message CreateTotemRequest {
+  string name = 1;
+}
+
+message CreateTotemResponse {
+  string id = 1;
+  string name = 2;
+}
+
+message GetTotemRequest {
+  string id = 1;
+}
+
+message GetTotemResponse {
+  string id = 1;
+  string name = 2;
+}
+
+message UpdateTotemRequest {
+  string id = 1;
+  string name = 2;
+}
+
+message UpdateTotemResponse {
+  string updated = 1;
+}
+
+message DeleteTotemRequest {
+  string id = 1;
+}
+
+message DeleteTotemResponse {
+  string deleted = 1;
+}
+
+message ListTotemsRequest {}
+
+message ListTotemsResponse {
+  repeated Totem Totems = 1;
+}

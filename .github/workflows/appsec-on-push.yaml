@@ -1,0 +1,73 @@
+name: Security scans
+
+on:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Gitleaks (full Git history)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan secrets with Gitleaks CLI
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" zricethezav/gitleaks:latest git /repo -v --exit-code 1
+
+  go-security:
+    name: Snyk SCA and gosec SAST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.4"
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: |
+            go.mod
+            go.sum
+            go-1.27.4
+
+      - name: Install Snyk CLI
+        run: npm install --global snyk
+
+      - name: Run Snyk dependency scan (high and critical)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test --severity-threshold=high
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run gosec (high and critical)
+        run: "$(go env GOPATH)/bin/gosec -severity high ./..."
+
+  go-tests:
+    name: Go unit and package tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run Go tests
+        run: go test -v -race ./...
